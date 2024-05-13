@@ -62,15 +62,15 @@ st.radio(
     key="agency")
 
 st.radio(
-    ("**Please rate how mentally demanding your interaction with the clinical "
-     "decision aids were, on a scale of 1 to 5:**"),
+    ("**Please rate how cognitively demanding your interaction with the "
+     "clinical decision aids were, on a scale of 1 to 5:**"),
     range(1, 6),
     format_func=(lambda x:
-                 ["1 - Very low mental demand",
-                  "2 - Low mental demand",
+                 ["1 - Very low demand",
+                  "2 - Low demand",
                   "3 - Neutral",
-                  "4 - High mental demand",
-                  "5 - Very high mental demand"][x-1]),
+                  "4 - High demand",
+                  "5 - Very high demand"][x-1]),
     captions=[
         ("Interacting with the clinical decision aids required minimal mental "
          "effort."),
