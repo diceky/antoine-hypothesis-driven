@@ -93,10 +93,10 @@ def parse_citations_from_message(message: str) -> tuple[list[str], str]:
     def citation_replacer(match: re.Match[str]):
         # Extract the citation from the match
         citation = (match.group(0)
-                    .removeprefix("{citation: '").removesuffix("'}"))
+                    .removeprefix("{citation: ").removesuffix("}"))
         # Add the citation to the list if it's not already there
         if citation not in citations:
-            citations.append(citation)
+            citations.append(citation.removeprefix("{citation: '").removesuffix("'}"))
         # Replace with the citation index
         return f":red-background[[{citations.index(citation) + 1}]]"
 
