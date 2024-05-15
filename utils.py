@@ -4,6 +4,7 @@ This file contains utility functions that are used across the app.
 
 import streamlit as st
 import re
+import string
 
 from config import Group
 
@@ -93,10 +94,12 @@ def parse_citations_from_message(message: str) -> tuple[list[str], str]:
     def citation_replacer(match: re.Match[str]):
         # Extract the citation from the match
         citation = (match.group(0)
-                    .removeprefix("{citation: ").removesuffix("}"))
+                    .removeprefix("{citation: ")
+                    .removesuffix("}")
+                    .strip(string.punctuation))
         # Add the citation to the list if it's not already there
         if citation not in citations:
-            citations.append(citation.removeprefix("{citation: '").removesuffix("'}"))
+            citations.append(citation)
         # Replace with the citation index
         return f":red-background[[{citations.index(citation) + 1}]]"
 
@@ -146,6 +149,7 @@ def get_run_and_thread_id(prompt: str) -> tuple[str, str]:
                 }
             ]
         },
+        stream=True,
         model=get_model(),
     )
     return (run.thread_id, run.id)

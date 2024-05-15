@@ -14,10 +14,10 @@ from utils import (
     on_hypotheses_change,
     get_hypotheses,
     get_ai_prompt,
-    get_run_and_thread_id,
-    get_run_status,
-    get_latest_message_content,
-    parse_citations_from_message)
+    parse_citations_from_message,
+    get_client,
+    get_model,
+    get_assistant_id)
 
 from config import Group
 
@@ -95,55 +95,55 @@ def display_ai_help(
 
     status_container = st.status(
         label="",
-        expanded=False,
+        expanded=True,
         state="running")
 
     if group is Group.HYPOTHESIS_DRIVEN:
         if len(hypotheses) == 0:
             status_container.update(
                 label="Please select at least one hypothesis.",
-                expanded=False,
                 state="error")
             return
     if group is Group.RECOMMENDATIONS_DRIVEN:
         if len(hypotheses) < 2:
             status_container.update(
                 label="Please add at least two hypotheses.",
-                expanded=False,
                 state="error")
             return
 
-    # Add message to a new thread and run it
-    # Because function is cached, this will only run once per prompt
-    thread_id, run_id = get_run_and_thread_id(
-        get_ai_prompt(group, case_description, hypotheses)
-    )
+    st.session_state['stream'] = get_client().beta.threads.create_and_run(
+        assistant_id=get_assistant_id(),
+        thread={
+            "messages": [
+                {
+                    "role": "user",
+                    "content": get_ai_prompt(
+                        group,
+                        case_description,
+                        hypotheses),
+                }
+            ]
+        },
+        stream=True,
+        model=get_model())
 
-    status_container.update(
-        label="Generating AI help...",
-        expanded=False,
-        state="running")
     with status_container:
-        while get_run_status(thread_id, run_id) in ["queued", "in_progress"]:
-            time.sleep(0.1)
-
-    if get_run_status(thread_id, run_id) == "completed":
-        status_container.update(
-                label="AI's help is ready:",
-                expanded=True,
-                state="complete")
-        with status_container:
-            citations, parsed_message = parse_citations_from_message(
-                get_latest_message_content(thread_id))
+        with st.empty():
+            message = st.write_stream(data_streamer)
+            citations, parsed_message = parse_citations_from_message(message)
             st.write(parsed_message)
-            display_citations(citations)
-            st.session_state['parsed_message'] = parsed_message
-            st.session_state['citations'] = citations
-    else:
-        status_container.update(
-                label="Failed to generate AI help. Please try again.",
-                expanded=False,
-                state="error")
+
+        display_citations(citations)
+        st.session_state['parsed_message'] = parsed_message
+        st.session_state['citations'] = citations
+
+
+def data_streamer():
+    for response in st.session_state['stream']:
+        if response.event == 'thread.message.delta':
+            value = response.data.delta.content[0].text.value
+            yield value
+            time.sleep(0.01)
 
 
 def display_citations(citations: list[str]):
