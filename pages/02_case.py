@@ -10,14 +10,13 @@ from utils import (
     get_case_index,
     get_case_description,
     get_group,
-    get_case_description_with_citations,
-    on_hypotheses_change,
+    parse_case_description,
     get_hypotheses,
     get_ai_prompt,
-    parse_citations_from_message,
-    get_client,
-    get_model,
-    get_assistant_id)
+    parse_message,
+    get_run_and_thread_id,
+    get_run_status,
+    get_latest_message_content)
 
 from config import Group
 
@@ -38,6 +37,9 @@ if f"case_{get_case_index()}_start_time" not in st.session_state["results"]:
     st.session_state["results"][f"case_{get_case_index()}_start_time"] = \
         datetime.now().time()
 
+if f"case_{get_case_index()}_hypotheses" not in st.session_state["results"]:
+    st.session_state["results"][f"case_{get_case_index()}_hypotheses"] = []
+
 
 #######################################
 # DISPLAYS
@@ -45,20 +47,21 @@ if f"case_{get_case_index()}_start_time" not in st.session_state["results"]:
 
 
 def display_case_description():
-    if st.session_state['citations'] is not None:
-        st.write(get_case_description_with_citations())
-    else:
-        st.write(get_case_description())
+    st.write(
+        parse_case_description(get_case_description(get_case_index()),
+                               st.session_state['citations']))
 
 
-def display_hypothesis_input(group: Group, key: str):
+def display_hypothesis_input(
+        group: Group,
+        key: str):
+
     columns = ["hypothesis"]
     column_config = {
             "hypothesis": st.column_config.TextColumn(
                 "Your hypotheses:",
                 help="Enter your hypotheses here.",
-                required=True,
-                validate="^[A-Za-z0-9 -]+$"
+                required=True
             )
         }
 
@@ -71,9 +74,8 @@ def display_hypothesis_input(group: Group, key: str):
             required=True,
         )
 
-    df = pd.DataFrame(columns=columns)
     st.data_editor(
-        df,
+        pd.DataFrame(columns=columns),
         column_config=column_config,
         use_container_width=True,
         num_rows='dynamic',
@@ -93,15 +95,29 @@ def display_ai_help(
 
     hypotheses = get_hypotheses(group, hypotheses_table)
 
+    # Save all hypotheses ever entered.
+    for ar in hypotheses_table['added_rows']:
+        h = ar['hypothesis']
+        if h not in st.session_state["results"][
+                f"case_{get_case_index()}_hypotheses"]:
+            st.session_state["results"][
+                f"case_{get_case_index()}_hypotheses"].append(h)
+
     status_container = st.status(
         label="",
-        expanded=True,
+        expanded=False,
         state="running")
 
+    # Check and ask for the right number of hypotheses.
     if group is Group.HYPOTHESIS_DRIVEN:
         if len(hypotheses) == 0:
             status_container.update(
-                label="Please select at least one hypothesis.",
+                label="Please select one hypothesis.",
+                state="error")
+            return
+        if len(hypotheses) > 1:
+            status_container.update(
+                label="Please select only one hypothesis.",
                 state="error")
             return
     if group is Group.RECOMMENDATIONS_DRIVEN:
@@ -111,42 +127,62 @@ def display_ai_help(
                 state="error")
             return
 
-    st.session_state['stream'] = get_client().beta.threads.create_and_run(
-        assistant_id=get_assistant_id(),
-        thread={
-            "messages": [
-                {
-                    "role": "user",
-                    "content": get_ai_prompt(
-                        group,
-                        case_description,
-                        hypotheses),
-                }
-            ]
-        },
-        stream=True,
-        model=get_model())
+    # Add message to a new thread and run it.
+    # Because function is cached, this will only run once per prompt and
+    # otherwise just return the corresponding ids.
+    thread_id, run_id = get_run_and_thread_id(
+        get_ai_prompt(group, case_description, hypotheses)
+    )
 
+    # Wait for the AI response to be generated.
     with status_container:
-        with st.empty():
-            message = st.write_stream(data_streamer)
-            citations, parsed_message = parse_citations_from_message(message)
+        while get_run_status(thread_id, run_id) in ["queued", "in_progress"]:
+            if status_container.status != "running":
+                status_container.update(
+                    label="",
+                    expanded=False,
+                    state="running")
+            time.sleep(0.1)
+
+    # Parse, save and display the AI's response.
+    if get_run_status(thread_id, run_id) == "completed":
+        status_container.update(
+                label="",
+                expanded=True,
+                state="complete")
+        with status_container:
+            raw_message = get_latest_message_content(thread_id)
+            citations, parsed_message = parse_message(
+                raw_message,
+                hypotheses,
+                get_group())
             st.write(parsed_message)
+            display_citations(citations)
+            st.session_state['parsed_message'] = parsed_message
+            st.session_state['citations'] = citations
+            st.session_state['results'][
+                f"case_{get_case_index()}_ai_help_{thread_id}"] = \
+                {
+                    "considered_hypotheses": hypotheses,
+                    "raw_message": raw_message,
+                    "parsed_message": parsed_message,
+                    "citations": citations
+                }
 
-        display_citations(citations)
-        st.session_state['parsed_message'] = parsed_message
-        st.session_state['citations'] = citations
-
-
-def data_streamer():
-    for response in st.session_state['stream']:
-        if response.event == 'thread.message.delta':
-            value = response.data.delta.content[0].text.value
-            yield value
-            time.sleep(0.01)
+    # Handle the run's failure to complete
+    else:
+        status_container.update(
+                label="Failed to generate AI help. Please try again.",
+                expanded=False,
+                state="error")
 
 
 def display_citations(citations: list[str]):
+    """
+    Display the citations.
+
+    :param citations: The list of citations to display.
+    """
     citations_string = ("**Citations:**\n\n"
                         if len(citations) > 0
                         else "No citations found.")
@@ -168,6 +204,10 @@ def dialog_case_done():
         st.switch_page("pages/03_case_questionnaire.py")
 
 
+def on_hypotheses_change():
+    st.toast("Hypotheses updated!")
+
+
 #######################################
 # MAIN
 #######################################
@@ -175,7 +215,7 @@ def dialog_case_done():
 
 st.title(f"Case {get_case_index() + 1}")
 
-case_description_container = st.container(height=300)
+case_description_container = st.container(height=400)
 
 col1, col2 = st.columns([0.3, 0.7])
 
@@ -187,11 +227,11 @@ with col1:
 with col2:
     display_ai_help(
         get_group(),
-        get_case_description(),
+        get_case_description(get_case_index()),
         st.session_state["hypotheses_table"])
 
-# Because the case description depends on the AI message (citations) we need
-# to compute it after the AI message.
+# Because the case description depends on the AI message - because of
+# citations - we need to compute it after the AI message.
 with case_description_container:
     display_case_description()
 
