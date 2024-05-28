@@ -1,4 +1,6 @@
 import streamlit as st
+from datetime import datetime
+import json
 
 from utils import page_setup
 
@@ -15,6 +17,9 @@ page_setup("Interview")
 #######################################
 
 st.title("Semi-structured interview")
+
+open(f"results/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.json",
+     "x").write(json.dumps(st.session_state["results"], default=str))
 
 with st.sidebar:
     st.header("Debug")

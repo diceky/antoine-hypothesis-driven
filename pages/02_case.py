@@ -83,6 +83,10 @@ def display_hypothesis_input(
         key=key)
 
 
+def on_hypotheses_change():
+    st.toast("Hypotheses updated!")
+
+
 def display_ai_help(
         group: Group,
         case_description: str,
@@ -202,10 +206,6 @@ def dialog_case_done():
             new_name=f"case_{get_case_index()}_hypotheses")
 
         st.switch_page("pages/03_case_questionnaire.py")
-
-
-def on_hypotheses_change():
-    st.toast("Hypotheses updated!")
 
 
 #######################################

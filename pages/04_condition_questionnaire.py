@@ -87,6 +87,10 @@ st.radio(
 if get_group() != "control":
     st.divider()
 
+    st.markdown("**Please mark each statement with the number that best "
+                "describes your feelings or your impression of trust with the "
+                "AI you saw.**")
+
     questions = [
         "I am confident in the AI. I feel that it works well.",
         "The outputs of the AI are very predictable.",

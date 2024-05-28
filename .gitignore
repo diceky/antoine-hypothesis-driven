@@ -2,3 +2,5 @@
 .streamlit
 __pycache__
 .DS_Store
+results/*
+!results/.gitkeep 
