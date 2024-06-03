@@ -1,11 +1,12 @@
-'''
+"""
 This file contains utility functions that are used across the app.
-'''
+"""
 
-import streamlit as st
+import json
 import re
 import string
-import json
+
+import streamlit as st
 
 from config import Group
 
@@ -19,9 +20,7 @@ def page_setup(page_title: str) -> None:
     :return: None
     """
     st.set_page_config(
-        page_title=page_title,
-        layout='wide',
-        initial_sidebar_state='collapsed'
+        page_title=page_title, layout="wide", initial_sidebar_state="collapsed"
     )
 
 
@@ -32,10 +31,8 @@ def save_widget(key: str, new_name: str | None = None) -> None:
     :param widget_key: The key of the widget.
     :return: None
     """
-    assert key in st.session_state, \
-        f"{key} cannot be found in session_state"
-    assert 'results' in st.session_state, \
-        "'results' cannot be found in session_state"
+    assert key in st.session_state, f"{key} cannot be found in session_state"
+    assert "results" in st.session_state, "'results' cannot be found in session_state"
 
     if new_name is not None:
         st.session_state["results"][new_name] = st.session_state[key]
@@ -62,9 +59,7 @@ def get_case_description(case_index: int) -> str:
     return open(f"data/case_{case_index}.txt", "r").read()
 
 
-def parse_case_description(
-        case_description: str,
-        citations: list[str] | None) -> str:
+def parse_case_description(case_description: str, citations: list[str] | None) -> str:
     """
     Parse the case description by adding citations to the text.
 
@@ -84,7 +79,7 @@ def parse_case_description(
             f":red-background[{citation_stripped_of_punctuation} \
                 [{citations.index(citation) + 1}]]",
             case_description,
-            flags=re.IGNORECASE
+            flags=re.IGNORECASE,
         )
 
     return case_description
@@ -94,9 +89,7 @@ def get_group() -> Group:
     return st.session_state["results"]["group"]
 
 
-def get_hypotheses(
-        group: Group,
-        hypotheses_table: dict) -> list[str]:
+def get_hypotheses(group: Group, hypotheses_table: dict) -> list[str]:
     """
     Return the hypotheses selected by the user.
 
@@ -105,20 +98,22 @@ def get_hypotheses(
     :return: The hypotheses selected by the user.
     """
     if group is Group.HYPOTHESIS_DRIVEN:
-        hypotheses = [h['hypothesis'] for h in hypotheses_table['added_rows']
-                      if h["selected"] is True]
+        hypotheses = [
+            h["hypothesis"]
+            for h in hypotheses_table["added_rows"]
+            if h["selected"] is True
+        ]
 
     if group is Group.RECOMMENDATIONS_DRIVEN:
-        hypotheses = [h["hypothesis"] for h in hypotheses_table['added_rows']]
+        hypotheses = [h["hypothesis"] for h in hypotheses_table["added_rows"]]
 
     return hypotheses
 
 
 @st.cache_data
 def parse_message(
-        message: str,
-        hypotheses: list[str],
-        group: Group) -> tuple[list[str], str]:
+    message: str, hypotheses: list[str], group: Group
+) -> tuple[list[str], str]:
     """
     Parse the JSON message from the AI, notably by adding citations to the
     text.
@@ -136,50 +131,44 @@ def parse_message(
 
     if group is Group.HYPOTHESIS_DRIVEN:
         parsed_message += f"**Evidence for {hypotheses[0]}**\n\n"
-        for e in message_dict['evidence_for']:
+        for e in message_dict["evidence_for"]:
             parsed_message += f"- {e['claim']}"
             for c in e["citations"]:
                 if c not in citations:
                     citations.append(c)
-                parsed_message += (
-                    f" :red-background[[{citations.index(c) + 1}]]")
+                parsed_message += f" :red-background[[{citations.index(c) + 1}]]"
             parsed_message += "\n\n"
 
         parsed_message += f"**Evidence against {hypotheses[0]}**\n\n"
-        for e in message_dict['evidence_against']:
+        for e in message_dict["evidence_against"]:
             parsed_message += f"- {e['claim']}"
             for c in e["citations"]:
                 if c not in citations:
                     citations.append(c)
-                parsed_message += (
-                    f" :red-background[[{citations.index(c) + 1}]]")
+                parsed_message += f" :red-background[[{citations.index(c) + 1}]]"
             parsed_message += "\n\n"
 
     if group is Group.RECOMMENDATIONS_DRIVEN:
-        parsed_message += (
-            f"Recommended lead diagnosis: \
-            **{message_dict['lead_diagnosis']}**\n\n")
+        parsed_message += f"Recommended lead diagnosis: \
+            **{message_dict['lead_diagnosis']}**\n\n"
 
         parsed_rationale = re.sub(
-            r'\[(\d+)\]',
+            r"\[(\d+)\]",
             lambda x: f":red-background[[{x.group(1)}]]",
-            message_dict['rationale'])
+            message_dict["rationale"],
+        )
 
-        parsed_message += (
-            f"**Rationale:** \
-            {parsed_rationale}\n\n")
+        parsed_message += f"**Rationale:** \
+            {parsed_rationale}\n\n"
 
-        for c in message_dict['citations']:
+        for c in message_dict["citations"]:
             if c not in citations:
                 citations.append(c)
 
     return citations, parsed_message
 
 
-def get_ai_prompt(
-        group: Group,
-        case_description: str,
-        hypotheses: list[str]) -> str:
+def get_ai_prompt(group: Group, case_description: str, hypotheses: list[str]) -> str:
 
     if group is Group.HYPOTHESIS_DRIVEN:
         return f"""
@@ -208,20 +197,20 @@ def get_ai_prompt(
 
 
 def get_client():
-    return st.session_state['client']
+    return st.session_state["client"]
 
 
 def get_model():
-    return st.session_state['results']['model']
+    return st.session_state["results"]["model"]
 
 
 def get_assistant_id():
-    return st.session_state['assistant'].id
+    return st.session_state["assistant"].id
 
 
 @st.cache_data(show_spinner=False)
 def get_run_and_thread_id(prompt: str) -> tuple[str, str]:
-    '''
+    """
     This function gets or creates a new thread and run in the OpenAI API
     and returns the thread_id and run_id. Because it is cached, it will
     only create a new thread and run once per prompt, otherwise just returning
@@ -229,7 +218,7 @@ def get_run_and_thread_id(prompt: str) -> tuple[str, str]:
 
     :param prompt: The prompt to send to the AI.
     :return: A tuple containing the thread_id and run_id.
-    '''
+    """
     run = get_client().beta.threads.create_and_run(
         assistant_id=get_assistant_id(),
         thread={
@@ -245,9 +234,7 @@ def get_run_and_thread_id(prompt: str) -> tuple[str, str]:
     return (run.thread_id, run.id)
 
 
-def get_run_status(
-        thread_id: str,
-        run_id: str) -> str:
+def get_run_status(thread_id: str, run_id: str) -> str:
     """
     Retrieve the runs status given its and the thread's id.
 
@@ -269,8 +256,10 @@ def get_latest_message_content(thread_id: str) -> str:
     :param thread_id: ID of the thread to get the message from.
     :return: String of the latest message in the thread.
     """
-    return get_client().beta.threads.messages.list(
-        thread_id,
-        limit=1,
-        order='desc'
-    ).data[0].content[0].text.value
+    return (
+        get_client()
+        .beta.threads.messages.list(thread_id, limit=1, order="desc")
+        .data[0]
+        .content[0]
+        .text.value
+    )

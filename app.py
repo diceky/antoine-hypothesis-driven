@@ -1,10 +1,8 @@
 import streamlit as st
-
 from openai import OpenAI
 
 from config import OPENAI_MODELS, Group
-from utils import page_setup, save_widget, get_client, get_group
-
+from utils import get_client, get_group, page_setup, save_widget
 
 #######################################
 # SETUP
@@ -19,8 +17,8 @@ if "results" not in st.session_state:
 if "group" not in st.session_state["results"]:
     st.session_state["results"]["group"] = None
 
-if 'client' not in st.session_state:
-    st.session_state['client'] = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+if "client" not in st.session_state:
+    st.session_state["client"] = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 
 #######################################
@@ -42,28 +40,31 @@ st.divider()
 st.selectbox(
     "Which group is the participant in?",
     Group,
-    format_func=(lambda x:
-                 {Group.CONTROL: "Control",
-                  Group.HYPOTHESIS_DRIVEN: "Hypothesis-driven AI",
-                  Group.RECOMMENDATIONS_DRIVEN: "Recommendations-driven AI"}
-                 [x]),
+    format_func=(
+        lambda x: {
+            Group.CONTROL: "Control",
+            Group.HYPOTHESIS_DRIVEN: "Hypothesis-driven AI",
+            Group.RECOMMENDATIONS_DRIVEN: "Recommendations-driven AI",
+        }[x]
+    ),
     index=None,
-    key="group")
+    key="group",
+)
 
 model = st.radio(
     label="Which model should be used?",
     options=OPENAI_MODELS,
     index=None,
     format_func=lambda s: f"`{s}`",
-    key="model")
+    key="model",
+)
 
 st.divider()
 
 if st.button(
     "Start Experiment",
-    disabled=(
-        st.session_state['group'] is None
-        or st.session_state['model'] is None)):
+    disabled=(st.session_state["group"] is None or st.session_state["model"] is None),
+):
 
     # Save the results
     save_widget("group")
@@ -71,12 +72,11 @@ if st.button(
 
     # Setup AI assistant
     if get_group() is Group.CONTROL:
-        st.session_state['assistant'] = None
+        st.session_state["assistant"] = None
     else:
-        assistant_id = st.secrets[
-            f"OPENAI_{get_group().name}_ASSISTANT_ID"]
-        st.session_state['assistant'] = (
-            get_client().beta.assistants.retrieve(assistant_id)
+        assistant_id = st.secrets[f"OPENAI_{get_group().name}_ASSISTANT_ID"]
+        st.session_state["assistant"] = get_client().beta.assistants.retrieve(
+            assistant_id
         )
 
     # Switch to the next page
