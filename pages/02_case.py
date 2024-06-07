@@ -1,3 +1,4 @@
+import os
 import time
 from datetime import datetime
 
@@ -199,7 +200,16 @@ def dialog_case_done():
 
 st.title(f"Case {get_case_index() + 1}")
 
-case_description_container = st.container(height=400)
+# Check if there is an image in the data folder and display it.
+if os.path.exists(f"data/case_{get_case_index()}.jpg"):
+    text_col, image_col = st.columns([0.8, 0.2])
+    with text_col:
+        case_description_container = st.container(height=400)
+    with image_col:
+        st.image(f"data/case_{get_case_index()}.jpg", use_column_width=True)
+# If there is no image, just display the case description.
+else:
+    case_description_container = st.container(height=400)
 
 col1, col2 = st.columns([0.3, 0.7])
 
