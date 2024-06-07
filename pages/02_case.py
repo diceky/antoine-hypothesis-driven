@@ -116,9 +116,9 @@ def display_ai_help(group: Group, case_description: str, hypotheses_table: dict)
             )
             return
     if group is Group.RECOMMENDATIONS_DRIVEN:
-        if len(hypotheses) < 2:
+        if len(hypotheses) == 0:
             status_container.update(
-                label="Please add at least two hypotheses.", state="error"
+                label="Please add at least one hypothesis.", state="error"
             )
             return
 
