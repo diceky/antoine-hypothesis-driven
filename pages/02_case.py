@@ -102,24 +102,26 @@ def display_ai_help(group: Group, case_description: str, hypotheses_table: dict)
         if h not in st.session_state["results"][f"case_{get_case_index()}_hypotheses"]:
             st.session_state["results"][f"case_{get_case_index()}_hypotheses"].append(h)
 
-    status_container = st.status(label="", expanded=False, state="running")
-
     # Check and ask for the right number of hypotheses.
     if group is Group.HYPOTHESIS_DRIVEN:
         if len(hypotheses) == 0:
-            status_container.update(
-                label="Please select one hypothesis.", state="error"
+            st.status(
+                label="Please select one hypothesis.", expanded=False, state="error"
             )
             return
         if len(hypotheses) > 1:
-            status_container.update(
-                label="Please select only one hypothesis.", state="error"
+            st.status(
+                label="Please select only one hypothesis.",
+                expanded=False,
+                state="error",
             )
             return
     if group is Group.RECOMMENDATIONS_DRIVEN:
         if len(hypotheses) == 0:
-            status_container.update(
-                label="Please add at least one hypothesis.", state="error"
+            st.status(
+                label="Please add at least one hypothesis.",
+                expanded=False,
+                state="error",
             )
             return
 
@@ -131,15 +133,18 @@ def display_ai_help(group: Group, case_description: str, hypotheses_table: dict)
     )
 
     # Wait for the AI response to be generated.
-    with status_container:
+    status_container = None
+    if get_run_status(thread_id, run_id) in ["queued", "in_progress"]:
+        status_container = st.status(label="", expanded=False, state="running")
         while get_run_status(thread_id, run_id) in ["queued", "in_progress"]:
-            if status_container.status != "running":
-                status_container.update(label="", expanded=False, state="running")
             time.sleep(0.1)
 
     # Parse, save and display the AI's response.
     if get_run_status(thread_id, run_id) == "completed":
-        status_container.update(label="", expanded=True, state="complete")
+        if status_container:
+            status_container.update(label="", expanded=True, state="complete")
+        else:
+            status_container = st.status(label="", expanded=True, state="complete")
         with status_container:
             raw_message = get_latest_message_content(thread_id)
             citations, parsed_message = parse_message(
@@ -160,7 +165,7 @@ def display_ai_help(group: Group, case_description: str, hypotheses_table: dict)
 
     # Handle the run's failure to complete
     else:
-        status_container.update(
+        st.status(
             label="Failed to generate AI help. Please try again.",
             expanded=False,
             state="error",
@@ -230,7 +235,13 @@ with case_description_container:
 
 st.divider()
 
-if st.button("Next"):
+st.checkbox(
+    "Please verbally provide a lead diagnosis and a rationale as if you were "
+    "presenting your conclusions to a colleague familiar with the case.",
+    key="concluded",
+)
+
+if st.button("Next", disabled=not st.session_state["concluded"]):
     dialog_case_done()
 
 with st.sidebar:
