@@ -54,7 +54,7 @@ st.selectbox(
 model = st.radio(
     label="Which model should be used?",
     options=OPENAI_MODELS,
-    index=None,
+    index=2,
     format_func=lambda s: f"`{s}`",
     key="model",
 )
