@@ -30,7 +30,7 @@ Follow these steps to set up and run the app:
     ```
 4. Create the recommendations-driven and hypothesis-driven assistants on the OpenAI platform and get their id.
 5. Create a `secrets.toml` file in a `.streamlit` directory and fill it with the required secrets. The structure of the secrets.toml file should look something like this:
-    ```toml
+    ```
     # directory here is master_thesis/.streamlit/secrets.toml
     OPENAI_API_KEY = your_openai_api_key
     OPENAI_RECOMMENDATIONS_DRIVEN_ASSISTANT_ID = your_recommendations_driven_assistant_id
