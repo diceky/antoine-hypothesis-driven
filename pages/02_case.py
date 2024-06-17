@@ -237,7 +237,7 @@ st.divider()
 
 st.checkbox(
     "Please verbally provide a lead diagnosis and a rationale as if you were "
-    "presenting your conclusions to a colleague familiar with the case.",
+    "presenting your conclusions to a colleague with whom you have discussed the case.",
     key="concluded",
 )
 
