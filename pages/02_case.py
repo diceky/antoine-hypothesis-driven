@@ -1,6 +1,7 @@
 import os
 import time
 from datetime import datetime
+from typing import Dict, List
 
 import pandas as pd
 import streamlit as st
@@ -41,6 +42,41 @@ if f"case_{get_case_index()}_start_time" not in st.session_state["results"]:
 
 if f"case_{get_case_index()}_hypotheses" not in st.session_state["results"]:
     st.session_state["results"][f"case_{get_case_index()}_hypotheses"] = []
+
+
+#######################################
+# HELPER FUNCTIONS
+#######################################
+
+
+def save_all_hypotheses(hypotheses_table: Dict):
+    case_key = f"case_{get_case_index()}"
+    for row in hypotheses_table.get("added_rows", []):
+        hypothesis = row["hypothesis"]
+        if hypothesis not in st.session_state["results"][f"{case_key}_hypotheses"]:
+            st.session_state["results"][f"{case_key}_hypotheses"].append(hypothesis)
+
+
+def validate_hypotheses(group: Group, hypotheses: List[str]) -> bool:
+    if group is Group.HYPOTHESIS_DRIVEN:
+        if len(hypotheses) == 0:
+            st.status(
+                label="Please select one hypothesis.", expanded=False, state="error"
+            )
+            return False
+        if len(hypotheses) > 1:
+            st.status(
+                label="Please select only one hypothesis.",
+                expanded=False,
+                state="error",
+            )
+            return False
+    elif group is Group.RECOMMENDATIONS_DRIVEN and len(hypotheses) == 0:
+        st.status(
+            label="Please add at least one hypothesis.", expanded=False, state="error"
+        )
+        return False
+    return True
 
 
 #######################################
@@ -97,33 +133,11 @@ def display_ai_help(group: Group, case_description: str, hypotheses_table: dict)
     hypotheses = get_hypotheses(group, hypotheses_table)
 
     # Save all hypotheses ever entered.
-    for ar in hypotheses_table["added_rows"]:
-        h = ar["hypothesis"]
-        if h not in st.session_state["results"][f"case_{get_case_index()}_hypotheses"]:
-            st.session_state["results"][f"case_{get_case_index()}_hypotheses"].append(h)
+    save_all_hypotheses(hypotheses_table)
 
     # Check and ask for the right number of hypotheses.
-    if group is Group.HYPOTHESIS_DRIVEN:
-        if len(hypotheses) == 0:
-            st.status(
-                label="Please select one hypothesis.", expanded=False, state="error"
-            )
-            return
-        if len(hypotheses) > 1:
-            st.status(
-                label="Please select only one hypothesis.",
-                expanded=False,
-                state="error",
-            )
-            return
-    if group is Group.RECOMMENDATIONS_DRIVEN:
-        if len(hypotheses) == 0:
-            st.status(
-                label="Please add at least one hypothesis.",
-                expanded=False,
-                state="error",
-            )
-            return
+    if not validate_hypotheses(group, hypotheses):
+        return
 
     # Add message to a new thread and run it.
     # Because function is cached, this will only run once per prompt and
@@ -181,8 +195,8 @@ def display_citations(citations: list[str]):
     citations_string = (
         "**Citations:**\n\n" if len(citations) > 0 else "No citations found."
     )
-    for citation in citations:
-        citations_string += f"{citations.index(citation) + 1}. {citation}\n\n"
+    for index, citation in enumerate(citations, start=1):
+        citations_string += f"{index}. {citation}\n\n"
     st.caption(citations_string)
 
 
@@ -217,10 +231,8 @@ else:
     case_description_container = st.container(height=400)
 
 col1, col2 = st.columns([0.3, 0.7])
-
 with col1:
     hypotheses_df = display_hypothesis_input(get_group(), key="hypotheses_table")
-
 with col2:
     display_ai_help(
         get_group(),
