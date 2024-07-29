@@ -2,7 +2,7 @@ import streamlit as st
 from openai import OpenAI
 
 from config import OPENAI_MODELS, Group
-from utils import get_client, get_group, page_setup, save_widget
+from utils import create_assistant, get_client, get_group, page_setup, save_widget
 
 #######################################
 # SETUP
@@ -71,13 +71,7 @@ if st.button(
     save_widget("model")
 
     # Setup AI assistant
-    if get_group() is Group.CONTROL:
-        st.session_state["assistant"] = None
-    else:
-        assistant_id = st.secrets[f"OPENAI_{get_group().name}_ASSISTANT_ID"]
-        st.session_state["assistant"] = get_client().beta.assistants.retrieve(
-            assistant_id
-        )
+    st.session_state["assistant"] = create_assistant(get_group())
 
     # Switch to the next page
     st.switch_page("pages/01_domain_AI_expertise_questionnaire.py")

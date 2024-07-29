@@ -8,7 +8,7 @@ import string
 
 import streamlit as st
 
-from config import Group
+from config import ASSISTANT_INSTRUCTIONS, Group
 
 
 def page_setup(page_title: str) -> None:
@@ -263,3 +263,23 @@ def get_latest_message_content(thread_id: str) -> str:
         .content[0]
         .text.value
     )
+
+
+def create_assistant(group: Group) -> None:
+    """
+    Create the assistant for the given group.
+
+    :param group: The group of the user.
+    :return: The assistant created.
+    """
+    assistant = None
+    if group is Group.HYPOTHESIS_DRIVEN or group is Group.RECOMMENDATIONS_DRIVEN:
+        assistant = get_client().beta.assistants.create(
+            name=f"{group.value.replace("_", " ").capitalize()} AI Assistant",
+            description=f"AI assistant that helps with {group.value.replace("_", "-").capitalize()} diagnostics.",
+            model=get_model(),
+            instructions=ASSISTANT_INSTRUCTIONS[group],
+            temperature=1e-10,
+            response_format={ "type": "json_object" },
+        )
+    return assistant
