@@ -2,7 +2,7 @@ import streamlit as st
 from openai import OpenAI
 
 from config import OPENAI_MODELS, Group
-from utils import create_assistant, get_client, get_group, page_setup, save_widget
+from utils import get_group, page_setup, save_widget
 
 #######################################
 # SETUP
@@ -30,13 +30,6 @@ st.title("Setup")
 
 st.divider()
 
-st.checkbox("PICF is signed")
-st.checkbox("Laptop is charged")
-st.checkbox("Screen-recording is setup on Zoom")
-st.checkbox("Audio-recording is setup on Zoom and on phone")
-
-st.divider()
-
 st.selectbox(
     "Which group is the participant in?",
     Group,
@@ -59,8 +52,6 @@ model = st.radio(
     key="model",
 )
 
-st.divider()
-
 if st.button(
     "Start Experiment",
     disabled=(st.session_state["group"] is None or st.session_state["model"] is None),
@@ -69,9 +60,6 @@ if st.button(
     # Save the results
     save_widget("group")
     save_widget("model")
-
-    # Setup AI assistant
-    st.session_state["assistant"] = create_assistant(get_group())
 
     # Switch to the next page
     st.switch_page("pages/01_domain_AI_expertise_questionnaire.py")

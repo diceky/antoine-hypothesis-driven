@@ -5,10 +5,12 @@ This file contains utility functions that are used across the app.
 import json
 import re
 import string
+from typing import Any, Dict, List, Literal, Tuple
 
 import streamlit as st
+from openai.types.chat.chat_completion import ChatCompletion
 
-from config import ASSISTANT_INSTRUCTIONS, Group
+from config import Group
 
 
 def page_setup(page_title: str) -> None:
@@ -89,31 +91,30 @@ def get_group() -> Group:
     return st.session_state["results"]["group"]
 
 
-def get_hypotheses(group: Group, hypotheses_table: dict) -> list[str]:
+def get_hypotheses(hypotheses_table: dict) -> Tuple[List[str], List[str]]:
     """
-    Return the hypotheses selected by the user.
-
-    :param group: The group of the user.
     :param hypotheses_table: The table of hypotheses as given by streamlit.
-    :return: The hypotheses selected by the user.
+    :return: A tuple containing the list of hypotheses and the selected hypotheses.
     """
-    if group is Group.HYPOTHESIS_DRIVEN:
-        hypotheses = [
-            h["hypothesis"]
-            for h in hypotheses_table["added_rows"]
-            if h["selected"] is True
-        ]
 
-    if group is Group.RECOMMENDATIONS_DRIVEN:
-        hypotheses = [h["hypothesis"] for h in hypotheses_table["added_rows"]]
+    hypotheses = [h["hypothesis"] for h in hypotheses_table["added_rows"]]
 
-    return hypotheses
+    selected_hypotheses = hypotheses
+    if len(hypotheses_table["added_rows"]) != 0:
+        if "selected" in hypotheses_table["added_rows"][0]:
+            selected_hypotheses = [
+                h["hypothesis"]
+                for h in hypotheses_table["added_rows"]
+                if h["selected"] is True
+            ]
+
+    return hypotheses, selected_hypotheses
 
 
 @st.cache_data
 def parse_message(
-    message: str, hypotheses: list[str], group: Group
-) -> tuple[list[str], str]:
+    message: str, hypotheses: List[str], selected_hypotheses: List[str], group: Group
+) -> Tuple[List[str], str]:
     """
     Parse the JSON message from the AI, notably by adding citations to the
     text.
@@ -130,7 +131,8 @@ def parse_message(
     citations = []
 
     if group is Group.HYPOTHESIS_DRIVEN:
-        parsed_message += f"**Evidence for {hypotheses[0]}**\n\n"
+        message_dict = message_dict[selected_hypotheses[0]]
+        parsed_message += f"**Evidence for {selected_hypotheses[0]}**\n\n"
         for e in message_dict["evidence_for"]:
             parsed_message += f"- {e['claim']}"
             for c in e["citations"]:
@@ -168,29 +170,6 @@ def parse_message(
     return citations, parsed_message
 
 
-def get_ai_prompt(group: Group, case_description: str, hypotheses: list[str]) -> str:
-
-    if group is Group.HYPOTHESIS_DRIVEN:
-        return f"""
-        <CASE_DESCRIPTION>{case_description}</CASE_DESCRIPTION>
-
-
-        <DIAGNOSTIC_HYPOTHESIS>
-        {hypotheses[0]}
-        </DIAGNOSTIC_HYPOTHESIS>"""
-
-    if group is Group.RECOMMENDATIONS_DRIVEN:
-        return f"""
-        <CASE_DESCRIPTION>{case_description}</CASE_DESCRIPTION>
-
-
-        <DIAGNOSTIC_HYPOTHESES>
-        {'\n'.join(hypotheses)}
-        </DIAGNOSTIC_HYPOTHESES>"""
-
-    return ""
-
-
 #######################################
 # OPENAI API
 #######################################
@@ -204,82 +183,196 @@ def get_model():
     return st.session_state["results"]["model"]
 
 
-def get_assistant_id():
-    return st.session_state["assistant"].id
-
-
 @st.cache_data(show_spinner=False)
-def get_run_and_thread_id(prompt: str) -> tuple[str, str]:
+def get_chat_completion(prompt: str, json_schema: Dict[str, Any]) -> ChatCompletion:
     """
-    This function gets or creates a new thread and run in the OpenAI API
-    and returns the thread_id and run_id. Because it is cached, it will
-    only create a new thread and run once per prompt, otherwise just returning
-    the already existing corresponding ids.
-
     :param prompt: The prompt to send to the AI.
-    :return: A tuple containing the thread_id and run_id.
+    :param json_schema: The JSON schema to use for the response.
+    :return: The chat completion object from OpenAI.
     """
-    run = get_client().beta.threads.create_and_run(
-        assistant_id=get_assistant_id(),
-        thread={
-            "messages": [
-                {
-                    "role": "user",
-                    "content": prompt,
-                }
-            ]
-        },
+    completion = get_client().chat.completions.create(
         model=get_model(),
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": prompt},
+        ],
+        response_format={"type": "json_schema", "json_schema": json_schema},
+        temperature=0,
     )
-    return (run.thread_id, run.id)
+    return completion
 
 
-def get_run_status(thread_id: str, run_id: str) -> str:
+def get_latest_message_content(completion: ChatCompletion) -> str | None:
     """
-    Retrieve the runs status given its and the thread's id.
-
-    :param thread_id: ID of the thread being run.
-    :param run_id: ID of the run to get the status of.
-    :return: String of the status of the run.
-    """
-    run = get_client().beta.threads.runs.retrieve(
-        thread_id=thread_id,
-        run_id=run_id,
-    )
-    return run.status
-
-
-def get_latest_message_content(thread_id: str) -> str:
-    """
-    Retrieve the content of the latest message in a thread.
-
-    :param thread_id: ID of the thread to get the message from.
+    :param completion: The chat completion object from OpenAI.
     :return: String of the latest message in the thread.
     """
-    return (
-        get_client()
-        .beta.threads.messages.list(thread_id, limit=1, order="desc")
-        .data[0]
-        .content[0]
-        .text.value
-    )
+    return completion.choices[0].message.content
 
 
-def create_assistant(group: Group) -> None:
-    """
-    Create the assistant for the given group.
+def get_ai_prompt(
+    group: Literal[Group.HYPOTHESIS_DRIVEN, Group.RECOMMENDATIONS_DRIVEN],
+    case_description: str,
+    hypotheses: list[str],
+) -> str:
+    if group is Group.HYPOTHESIS_DRIVEN:
+        return f"""
+You are a highly knowledgeable and helpful clinical assistant specializing in providing detailed and accurate evaluations of diagnostic hypotheses. Your primary role is to assist clinicians by thoroughly examining and interpreting clinical cases.
 
-    :param group: The group of the user.
-    :return: The assistant created.
-    """
-    assistant = None
-    if group is Group.HYPOTHESIS_DRIVEN or group is Group.RECOMMENDATIONS_DRIVEN:
-        assistant = get_client().beta.assistants.create(
-            name=f"{group.value.replace("_", " ").capitalize()} AI Assistant",
-            description=f"AI assistant that helps with {group.value.replace("_", "-").capitalize()} diagnostics.",
-            model=get_model(),
-            instructions=ASSISTANT_INSTRUCTIONS[group],
-            temperature=1e-10,
-            response_format={ "type": "json_object" },
-        )
-    return assistant
+You will be provided with a case description and multiple diagnostic hypotheses for this case, generated by the clinician you are assisting.
+
+Your task is to:
+
+    1. Provide both evidence supporting and contradicting the given hypothesis.
+    2. Be meticulous in evaluating every piece of evidence available in the case description.
+    3. Ensure each piece of evidence is assessed correctly, offering a balanced view of its implications.
+    4. For every claim you make, provide a clear explanation as to why it supports or refutes the hypothesis. Your explanations should be detailed and understandable, intended to assist the clinician in making an informed decision.
+    5. Quote direct passages from the case description to support your claims.
+
+Guidelines for completing your task:
+
+    - Direct Citations: Any time you use information from the case description, annotate the claim with direct, continuous passages from the text. If multiple passages are needed, cite each one separately WITHOUT using ellipses. Make sure you only cite passages that can be found in the case description!
+    - Thorough Analysis: Take your time to think through each piece of evidence step-by-step. Consider all aspects of the case description and the diagnostic hypothesis.
+    - Detailed Explanations: Provide comprehensive explanations that elucidate why the evidence supports or contradicts the hypothesis. Use clear, clinical reasoning to explain your thought process.
+    - Balanced Evaluation: Ensure that your analysis is balanced and impartial, presenting a fair evaluation of all evidence.
+
+Remember, the goal is to assist the clinician by providing a clear, well-reasoned analysis of the evidence for and against the diagnostic hypothesis. Your thoroughness and attention to detail are crucial for ensuring the clinician has all the necessary information to make an informed decision.
+
+Take your time to do the task correctly and think things through step by step.
+
+Answer using a JSON format.
+
+{case_description}
+
+{"\n".join(hypotheses)}
+""".strip()
+
+    if group is Group.RECOMMENDATIONS_DRIVEN:
+        return f"""
+You are a highly knowledgeable and helpful clinical assistant specializing in providing detailed and accurate evaluations of diagnostic hypotheses. Your primary role is to assist clinicians by thoroughly examining and interpreting clinical cases.
+
+You will be provided with a case description and a list of diagnostic hypotheses for this case, generated by the clinician you are assisting.
+
+Your task is to:
+
+    1. Reflect upon the case description, evaluating each hypothesis independently to see if it presents a likely diagnosis for the given case. Be meticulous in evaluating every piece of evidence available in the case description. Ensure each piece of evidence is assessed correctly, offering a balanced view of its implications.
+    2. Provide a lead diagnosis from the list of hypotheses provided. This diagnosis should be the most probable based on the evidence presented in the case description.
+    3. Provide a rationale explaining why the lead diagnosis you chose is the most probable, citing the case description to support your claims.
+    4. Your explanations should be detailed and understandable, intended to assist the clinician in making an informed decision.
+    5. Quote direct passages from the case description to support your claims.
+
+Here are the detailed guidelines for completing your task:
+    - Thorough Analysis: Take your time to think through each piece of evidence step-by-step. Consider all aspects of the case description and the diagnostic hypotheses.
+    - Direct Citations: Any time you use information from the case description, annotate the claim with direct, continuous passages from the text. If multiple passages are needed, cite each one separately WITHOUT using ellipses. Make sure you only cite passages that can be found in the case description! Citations will be collected in the "citations" list, and references to that list made in the "rationale" text, by using square brackets containing the index number of the corresponding citation, e.g. [1].
+    - Detailed Explanations: Provide comprehensive explanations that elucidate why the evidence supports the chosen lead diagnosis. Use clear, clinical reasoning to explain your thought process.
+
+Remember, the goal is to recommend the correct lead diagnosis. Your thoroughness and attention to detail are crucial for ensuring the clinician has all the necessary information to make an informed decision.
+
+Take your time to do the task correctly and think things through step by step.
+
+Answer using a JSON format.
+
+{case_description}
+
+{"\n".join(hypotheses)}
+""".strip()
+
+
+def get_json_schema(
+    group: Literal[Group.RECOMMENDATIONS_DRIVEN, Group.HYPOTHESIS_DRIVEN],
+    hypotheses: list[str],
+) -> Dict[str, Any]:
+    if group is Group.RECOMMENDATIONS_DRIVEN:
+        return gen_json_schema_for_recommendation_driven()
+
+    if group is Group.HYPOTHESIS_DRIVEN:
+        return gen_json_schema_for_hypothesis_driven(hypotheses)
+
+
+def gen_json_schema_for_recommendation_driven() -> Dict[str, Any]:
+    return {
+        "name": "get_diagnosis",
+        "description": "Provide a diagnosis for the given case.",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "rationale": {
+                    "type": "string",
+                    "description": "Your rationale for the diagnosis you provided, citing the case description to support your claims.",
+                },
+                "citations": {
+                    "type": "array",
+                    "description": "Direct citation from the case description that back up the rationale",
+                    "items": {"type": "string"},
+                },
+                "lead_diagnosis": {
+                    "type": "string",
+                    "description": "The diagnosis you believe is most likely based on the evidence presented.",
+                },
+            },
+            "required": ["lead_diagnosis", "citations", "rationale"],
+            "additionalProperties": False,
+        },
+        "strict": True,
+    }
+
+
+def gen_json_schema_for_hypothesis_driven(options: List[str]) -> Dict[str, Any]:
+    schema = {
+        "name": "get_evidence_for_and_against",
+        "description": "Provide evidence supporting and contradicting the given hypothesis.",
+        "schema": {
+            "type": "object",
+            "properties": {},
+            "required": [option for option in options],
+            "additionalProperties": False,
+        },
+        "strict": True,
+    }
+    for option in options:
+        schema["schema"]["properties"][option] = {
+            "type": "object",
+            "properties": {
+                "evidence_for": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "claim": {
+                                "type": "string",
+                                "description": "A statement presenting evidence supporting the hypothesis, and explaining why.",
+                            },
+                            "citations": {
+                                "type": "array",
+                                "description": "Direct citation from the case description that back up the claim",
+                                "items": {"type": "string"},
+                            },
+                        },
+                        "required": ["claim", "citations"],
+                        "additionalProperties": False,
+                    },
+                },
+                "evidence_against": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "claim": {
+                                "type": "string",
+                                "description": "A statement presenting evidence refuting the hypothesis, and explaining why.",
+                            },
+                            "citations": {
+                                "type": "array",
+                                "description": "Direct citation from the case description that back up the claim",
+                                "items": {"type": "string"},
+                            },
+                        },
+                        "required": ["claim", "citations"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            "additionalProperties": False,
+            "required": ["evidence_for", "evidence_against"],
+        }
+    return schema

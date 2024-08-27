@@ -11,11 +11,11 @@ from utils import (
     get_ai_prompt,
     get_case_description,
     get_case_index,
+    get_chat_completion,
     get_group,
     get_hypotheses,
+    get_json_schema,
     get_latest_message_content,
-    get_run_and_thread_id,
-    get_run_status,
     page_setup,
     parse_case_description,
     parse_message,
@@ -130,60 +130,39 @@ def display_ai_help(group: Group, case_description: str, hypotheses_table: dict)
         st.write("You are in the control group. You will not receive any AI help.")
         return
 
-    hypotheses = get_hypotheses(group, hypotheses_table)
+    hypotheses, selected_hypotheses = get_hypotheses(hypotheses_table)
 
-    # Save all hypotheses ever entered.
     save_all_hypotheses(hypotheses_table)
 
-    # Check and ask for the right number of hypotheses.
-    if not validate_hypotheses(group, hypotheses):
+    if not validate_hypotheses(group, selected_hypotheses):
         return
 
-    # Add message to a new thread and run it.
-    # Because function is cached, this will only run once per prompt and
-    # otherwise just return the corresponding ids.
-    thread_id, run_id = get_run_and_thread_id(
-        get_ai_prompt(group, case_description, hypotheses)
+    chat_completion = get_chat_completion(
+        get_ai_prompt(group, case_description, hypotheses),
+        get_json_schema(group, hypotheses),
     )
 
-    # Wait for the AI response to be generated.
-    status_container = None
-    if get_run_status(thread_id, run_id) in ["queued", "in_progress"]:
-        status_container = st.status(label="", expanded=False, state="running")
-        while get_run_status(thread_id, run_id) in ["queued", "in_progress"]:
-            time.sleep(0.1)
-
-    # Parse, save and display the AI's response.
-    if get_run_status(thread_id, run_id) == "completed":
-        if status_container:
-            status_container.update(label="", expanded=True, state="complete")
+    with st.status(label="", expanded=True, state="complete"):
+        raw_message = get_latest_message_content(chat_completion)
+        if raw_message is None:
+            st.write("No AI message received.")
         else:
-            status_container = st.status(label="", expanded=True, state="complete")
-        with status_container:
-            raw_message = get_latest_message_content(thread_id)
             citations, parsed_message = parse_message(
-                raw_message, hypotheses, get_group()
+                raw_message, hypotheses, selected_hypotheses, get_group()
             )
             st.write(parsed_message)
             display_citations(citations)
             st.session_state["parsed_message"] = parsed_message
             st.session_state["citations"] = citations
             st.session_state["results"][
-                f"case_{get_case_index()}_ai_help_{thread_id}"
+                f"case_{get_case_index()}_ai_help_{chat_completion.id}"
             ] = {
-                "considered_hypotheses": hypotheses,
+                "hypotheses": hypotheses,
+                "selected_hypotheses": selected_hypotheses,
                 "raw_message": raw_message,
                 "parsed_message": parsed_message,
                 "citations": citations,
             }
-
-    # Handle the run's failure to complete
-    else:
-        st.status(
-            label="Failed to generate AI help. Please try again.",
-            expanded=False,
-            state="error",
-        )
 
 
 def display_citations(citations: list[str]):
