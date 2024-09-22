@@ -5,7 +5,7 @@ This file contains utility functions that are used across the app.
 import json
 import re
 import string
-from typing import Any, Dict, List, Literal, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import streamlit as st
 from openai.types.chat.chat_completion import ChatCompletion
@@ -15,10 +15,9 @@ from config import Group
 
 def page_setup(page_title: str) -> None:
     """
-    Setup the page with the given title. Optionally, show the debug sidebar.
+    Setup the page with the given title.
 
     :param page_title: The title of the page.
-    :param debug: Whether to show the debug sidebar.
     :return: None
     """
     st.set_page_config(
@@ -26,11 +25,12 @@ def page_setup(page_title: str) -> None:
     )
 
 
-def save_widget(key: str, new_name: str | None = None) -> None:
+def save_widget(key: str, new_name: Optional[str] = None) -> None:
     """
     Save the data of an entry in the session state to the results dictionnary.
 
     :param widget_key: The key of the widget.
+    :param new_name: The new name, if any, to use in the results dictionnary.
     :return: None
     """
     assert key in st.session_state, f"{key} cannot be found in session_state"

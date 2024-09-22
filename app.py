@@ -56,12 +56,9 @@ if st.button(
     "Start Experiment",
     disabled=(st.session_state["group"] is None or st.session_state["model"] is None),
 ):
-
-    # Save the results
     save_widget("group")
     save_widget("model")
 
-    # Switch to the next page
     st.switch_page("pages/01_domain_AI_expertise_questionnaire.py")
 
 with st.sidebar:
