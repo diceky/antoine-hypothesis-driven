@@ -188,7 +188,7 @@ def display_citations(citations: list[str]):
     st.caption(citations_string)
 
 
-@st.experimental_dialog("Are you done with the case?")  # type: ignore
+@st.experimental_dialog("Are you sure you want to move on to the next case?")  # type: ignore
 def dialog_case_done():
     if st.button("Yes", type="primary"):
 
