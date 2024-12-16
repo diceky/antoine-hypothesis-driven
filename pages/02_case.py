@@ -121,7 +121,16 @@ def display_hypothesis_input(group: Group, key: str):
 
 
 def on_hypotheses_change():
-    st.toast("Hypotheses updated!")
+    # Get the current hypotheses table from session state
+    hypotheses_table = st.session_state["hypotheses_table"]
+    
+    # Sort the added_rows if they exist
+    if "added_rows" in hypotheses_table and hypotheses_table["added_rows"]:
+        sorted_rows = sorted(hypotheses_table["added_rows"], key=lambda x: x["hypothesis"].lower())
+        hypotheses_table["added_rows"] = sorted_rows
+
+    #st.toast("Hypotheses updated!")
+    st.toast("Hypotheses updated and alphabetically sorted!")
 
 
 def display_ai_help(group: Group, case_description: str, hypotheses_table: dict):
