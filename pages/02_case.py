@@ -222,11 +222,19 @@ col1, col2 = st.columns([0.3, 0.7])
 with col1:
     hypotheses_df = display_hypothesis_input(get_group(), key="hypotheses_table")
 with col2:
-    display_ai_help(
-        get_group(),
-        get_case_description(get_case_index()),
-        st.session_state["hypotheses_table"],
-    )
+    if get_group() is Group.RECOMMENDATIONS_DRIVEN:
+        if st.button("See AI Recommendations"): # only show recommendations when the button is pressed
+            display_ai_help(
+                get_group(),
+                get_case_description(get_case_index()),
+                st.session_state["hypotheses_table"],
+            )
+    else:
+        display_ai_help(
+            get_group(),
+            get_case_description(get_case_index()),
+            st.session_state["hypotheses_table"],
+        )
 
 # Because the case description depends on the AI message - because of
 # citations - we need to compute it after the AI message.
