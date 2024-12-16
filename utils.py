@@ -141,7 +141,7 @@ def parse_message(
                 parsed_message += f" :red-background[[{citations.index(c) + 1}]]"
             parsed_message += "\n\n"
 
-        parsed_message += f"**Evidence against {hypotheses[0]}**\n\n"
+        parsed_message += f"**Evidence against {selected_hypotheses[0]}**\n\n"
         for e in message_dict["evidence_against"]:
             parsed_message += f"- {e['claim']}"
             for c in e["citations"]:
